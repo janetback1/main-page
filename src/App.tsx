@@ -4,222 +4,247 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { categories as configuredCategories } from './data/categories.js';
-import { sites as configuredSites } from './data/sites.js';
+import { Plus } from 'lucide-react';
+import { initialSites } from './data/sites.js';
+import { Site, SiteItem } from './components/SiteItem';
+import { SiteModal } from './components/SiteModal';
 import { SearchBox } from './components/SearchBox';
-import { PinnedSection } from './components/PinnedSection';
-import { CategorySection } from './components/CategorySection';
-import { Site } from './components/SiteCard';
 
-const PINNED_STORAGE_KEY = 'personal_nav_pinned_sites_v1';
+const SITES_STORAGE_KEY = 'personal_homepage_sites_v2';
 
-function loadPinnedSites(): string[] {
+function loadSitesFromStorage(): Site[] {
   try {
-    const raw = window.localStorage.getItem(PINNED_STORAGE_KEY);
-    if (!raw) return [];
+    const raw = window.localStorage.getItem(SITES_STORAGE_KEY);
+    if (!raw) return initialSites as Site[];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter((item) => item && typeof item.name === 'string')
+        .map((item, idx) => ({
+          id: item.id || `site-${idx}-${Date.now()}`,
+          name: item.name,
+          url: item.url || 'URL_PLACEHOLDER',
+          icon: item.icon || '',
+        }));
+    }
+    return initialSites as Site[];
   } catch {
-    return [];
+    return initialSites as Site[];
   }
 }
 
-function savePinnedSites(names: string[]): void {
+function saveSitesToStorage(sites: Site[]): void {
   try {
-    window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(names));
+    window.localStorage.setItem(SITES_STORAGE_KEY, JSON.stringify(sites));
   } catch {
-    // 忽略隐私模式或配额限制导致的写入异常
+    // 忽略存储写入异常
   }
 }
 
 export default function App() {
+  const [sites, setSites] = useState<Site[]>(() => loadSitesFromStorage());
   const [searchQuery, setSearchQuery] = useState('');
-  const [pinnedList, setPinnedList] = useState<string[]>(() => loadPinnedSites());
-  const [placeholderNotice, setPlaceholderNotice] = useState<Site | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSite, setEditingSite] = useState<Site | null>(null);
+
+  // 长按 / 右键触发的简洁管理菜单状态
+  const [managingSite, setManagingSite] = useState<Site | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
-    savePinnedSites(pinnedList);
-  }, [pinnedList]);
+    saveSitesToStorage(sites);
+  }, [sites]);
 
-  const pinnedNamesSet = useMemo(() => new Set(pinnedList), [pinnedList]);
+  const normalizedQuery = searchQuery.trim().toLowerCase();
 
-  const handleTogglePin = (siteName: string) => {
-    setPinnedList((prev) =>
-      prev.includes(siteName)
-        ? prev.filter((name) => name !== siteName)
-        : [...prev, siteName]
+  const displayedSites = useMemo(() => {
+    if (!normalizedQuery) return sites;
+    return sites.filter((site) =>
+      site.name.toLowerCase().includes(normalizedQuery)
     );
+  }, [sites, normalizedQuery]);
+
+  const handleOpenAddModal = () => {
+    setEditingSite(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenManageMenu = (site: Site) => {
+    setManagingSite(site);
+    setConfirmingDelete(false);
+  };
+
+  const handleCloseManageMenu = () => {
+    setManagingSite(null);
+    setConfirmingDelete(false);
+  };
+
+  const handleEditFromMenu = () => {
+    if (!managingSite) return;
+    const target = managingSite;
+    handleCloseManageMenu();
+    setEditingSite(target);
+    setIsModalOpen(true);
+  };
+
+  const handleConfirmDeleteFromMenu = () => {
+    if (!managingSite) return;
+    const targetId = managingSite.id;
+    setSites((prev) => prev.filter((item) => item.id !== targetId));
+    handleCloseManageMenu();
   };
 
   const handlePlaceholderClick = (site: Site) => {
-    setPlaceholderNotice(site);
+    setEditingSite(site);
+    setIsModalOpen(true);
   };
 
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const isSearching = normalizedQuery.length > 0;
-
-  // 根据搜索词筛选网站（支持匹配网站名称、描述、分类名称）
-  const filteredSites = useMemo(() => {
-    if (!isSearching) return configuredSites as Site[];
-    return (configuredSites as Site[]).filter((site) => {
-      const nameMatch = site.name.toLowerCase().includes(normalizedQuery);
-      const descMatch = (site.description || '').toLowerCase().includes(normalizedQuery);
-      const categoryMatch = site.category.toLowerCase().includes(normalizedQuery);
-      return nameMatch || descMatch || categoryMatch;
-    });
-  }, [isSearching, normalizedQuery]);
-
-  // 合并配置的分类与数据中可能新增的分类，确保不遗漏任何网站
-  const allCategories = useMemo(() => {
-    const list = [...configuredCategories];
-    for (const site of configuredSites as Site[]) {
-      if (site.category && !list.includes(site.category)) {
-        list.push(site.category);
-      }
+  const handleSaveSite = (data: { name: string; url: string; icon: string }) => {
+    if (editingSite) {
+      setSites((prev) =>
+        prev.map((item) =>
+          item.id === editingSite.id
+            ? {
+                ...item,
+                name: data.name,
+                url: data.url,
+                icon: data.icon,
+              }
+            : item
+        )
+      );
+    } else {
+      const newSite: Site = {
+        id: `site-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: data.name,
+        url: data.url,
+        icon: data.icon,
+      };
+      setSites((prev) => [...prev, newSite]);
     }
-    return list;
-  }, []);
-
-  // 置顶区的网站列表（按用户置顶顺序排列，同时受搜索词过滤）
-  const pinnedSites = useMemo(() => {
-    const siteMap = new Map<string, Site>();
-    for (const site of filteredSites) {
-      siteMap.set(site.name, site);
-    }
-    return pinnedList
-      .map((name) => siteMap.get(name))
-      .filter((site): site is Site => Boolean(site));
-  }, [filteredSites, pinnedList]);
-
-  // 按分类分组网站
-  const groupedByCategory = useMemo(() => {
-    const map = new Map<string, Site[]>();
-    for (const cat of allCategories) {
-      map.set(cat, []);
-    }
-    for (const site of filteredSites) {
-      const list = map.get(site.category) || [];
-      list.push(site);
-      map.set(site.category, list);
-    }
-    return map;
-  }, [allCategories, filteredSites]);
+    setIsModalOpen(false);
+    setEditingSite(null);
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
-      {/* 顶部栏：遵循简洁单行结构 */}
-      <header className="border-b border-slate-200/80 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
-          {/* 区域 1：网站标题 */}
-          <a
-            href="#"
-            className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 whitespace-nowrap"
-          >
-            我的导航
-          </a>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="mx-auto max-w-5xl px-3 py-4 sm:px-6 sm:py-7">
+        {/* 紧凑顶部栏 */}
+        <header className="mb-4 sm:mb-6 flex items-center justify-between gap-3">
+          <h1 className="text-base sm:text-lg font-semibold tracking-tight text-slate-900 whitespace-nowrap">
+            我的主页
+          </h1>
+          <SearchBox value={searchQuery} onChange={setSearchQuery} />
+        </header>
 
-          {/* 区域 2：桌面端分类快速跳转锚点 */}
-          <nav
-            aria-label="分类快速导航"
-            className="hidden md:flex items-center gap-6 text-sm text-slate-600"
-          >
-            {allCategories.slice(0, 6).map((category) => (
-              <a
-                key={category}
-                href={`#category-${category}`}
-                className="hover:text-slate-900 hover:underline underline-offset-4 transition-colors whitespace-nowrap"
-              >
-                {category}
-              </a>
-            ))}
-          </nav>
-
-          {/* 区域 3：站点计数统计 */}
-          <div className="flex items-center gap-3 text-xs text-slate-500 tabular-nums whitespace-nowrap">
-            <span>共 {configuredSites.length} 个站点</span>
-          </div>
-        </div>
-      </header>
-
-      {/* 主体内容区 */}
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-5 pb-12 sm:px-6 sm:pt-7 lg:px-8">
-        {/* 搜索框区域 */}
-        <div className="mb-7 sm:mb-9">
-          <SearchBox
-            value={searchQuery}
-            onChange={setSearchQuery}
-            totalCount={configuredSites.length}
-            filteredCount={filteredSites.length}
-          />
-        </div>
-
-        {/* 未配置网址 (URL_PLACEHOLDER) 点击提示条 */}
-        {placeholderNotice && (
-          <div
-            role="status"
-            className="mb-6 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-xs sm:text-sm text-amber-900"
-          >
-            <span>
-              <strong>{placeholderNotice.name}</strong> 当前链接为占位符（
-              <code className="font-mono">URL_PLACEHOLDER</code>
-              ），请在 <code className="font-mono">src/data/sites.js</code> 中替换为实际网址。
-            </span>
-            <button
-              type="button"
-              onClick={() => setPlaceholderNotice(null)}
-              className="ml-4 shrink-0 min-h-[36px] px-2.5 text-xs font-medium text-amber-800 underline underline-offset-2 hover:text-amber-950 cursor-pointer"
-            >
-              知道了
-            </button>
-          </div>
-        )}
-
-        {/* 置顶网站区域 */}
-        <PinnedSection
-          sites={pinnedSites}
-          isSearching={isSearching}
-          onTogglePin={handleTogglePin}
-          onPlaceholderClick={handlePlaceholderClick}
-        />
-
-        {/* 搜索无结果提示 */}
-        {isSearching && filteredSites.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-sm text-slate-500">
-              未找到包含「{searchQuery.trim()}」的网站或分类
-            </p>
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="mt-3 inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              显示全部网站
-            </button>
-          </div>
-        ) : (
-          /* 各分类网站列表 */
-          <div>
-            {allCategories.map((category) => (
-              <CategorySection
-                key={category}
-                category={category}
-                sites={groupedByCategory.get(category) || []}
-                pinnedNames={pinnedNamesSet}
-                onTogglePin={handleTogglePin}
+        {/* 紧凑图标墙：仅展示 图标 + 网站名称，以及唯一的「＋ 添加网站」 */}
+        <main>
+          <div className="icon-wall-grid">
+            {displayedSites.map((site) => (
+              <SiteItem
+                key={site.id}
+                site={site}
+                onLongPressOrContext={handleOpenManageMenu}
                 onPlaceholderClick={handlePlaceholderClick}
               />
             ))}
-          </div>
-        )}
-      </main>
 
-      {/* 简洁页脚 */}
-      <footer className="border-t border-slate-200/70 bg-white/60 py-5">
-        <div className="mx-auto flex max-w-7xl flex-col sm:flex-row items-center justify-between gap-2 px-4 text-xs text-slate-400 sm:px-6 lg:px-8">
-          <span>我的导航 · 个人日常互联网首页</span>
-          <span>修改 src/data/sites.js 与 src/data/categories.js 即可维护导航数据</span>
+            {/* 唯一的「＋ 添加网站」入口：与普通网站采用相同的紧凑图标样式 */}
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              aria-label="添加网站"
+              className="group flex w-full max-w-[76px] sm:max-w-[92px] flex-col items-center select-none text-center cursor-pointer focus:outline-none"
+            >
+              <div className="site-icon-box flex items-center justify-center rounded-xl border border-dashed border-slate-300 text-slate-400 transition-colors duration-150 group-hover:border-slate-400 group-hover:text-slate-700 group-active:scale-95">
+                <Plus className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.8} />
+              </div>
+              <span className="mt-1.5 w-full truncate px-0.5 text-xs leading-tight text-slate-500 group-hover:text-slate-800">
+                添加网站
+              </span>
+            </button>
+          </div>
+        </main>
+      </div>
+
+      {/* 长按（手机）/ 右键（桌面）触发的简洁小管理菜单 */}
+      {managingSite && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4"
+          onClick={handleCloseManageMenu}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`管理 ${managingSite.name}`}
+            className="w-full max-w-[240px] rounded-2xl border border-slate-200 bg-white p-2 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-slate-100 px-3 py-2 text-center">
+              <p className="truncate text-xs font-semibold text-slate-800">
+                {managingSite.name}
+              </p>
+            </div>
+
+            {!confirmingDelete ? (
+              <div className="mt-1 flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={handleEditFromMenu}
+                  className="w-full rounded-xl py-2.5 text-center text-sm font-medium text-slate-700 hover:bg-slate-100 active:bg-slate-200/70 transition-colors cursor-pointer"
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="w-full rounded-xl py-2.5 text-center text-sm font-medium text-red-600 hover:bg-red-50 active:bg-red-100/70 transition-colors cursor-pointer"
+                >
+                  删除
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseManageMenu}
+                  className="w-full rounded-xl py-2.5 text-center text-sm text-slate-500 hover:bg-slate-100 active:bg-slate-200/70 transition-colors cursor-pointer"
+                >
+                  取消
+                </button>
+              </div>
+            ) : (
+              <div className="mt-1 flex flex-col gap-1 p-1">
+                <p className="px-2 py-1.5 text-center text-xs text-slate-600">
+                  确定要删除「{managingSite.name}」吗？
+                </p>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteFromMenu}
+                  className="w-full rounded-xl bg-red-600 py-2 text-center text-xs font-medium text-white hover:bg-red-700 transition-colors cursor-pointer"
+                >
+                  确认删除
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(false)}
+                  className="w-full rounded-xl py-2 text-center text-xs text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  取消
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </footer>
+      )}
+
+      {/* 添加 / 编辑网站弹窗 */}
+      <SiteModal
+        isOpen={isModalOpen}
+        editingSite={editingSite}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingSite(null);
+        }}
+        onSave={handleSaveSite}
+      />
     </div>
   );
 }

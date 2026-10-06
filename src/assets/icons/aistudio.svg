@@ -1,4 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-  <rect width="24" height="24" rx="6" fill="#1A73E8"/>
-  <path d="M12 5C12.4 8.6 15.4 11.6 19 12C15.4 12.4 12.4 15.4 12 19C11.6 15.4 8.6 12.4 5 12C8.6 11.6 11.6 8.6 12 5Z" fill="#FFFFFF"/>
+  <defs>
+    <linearGradient id="aistudio_grad" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="50%" stop-color="#669DF6"/>
+      <stop offset="100%" stop-color="#1A73E8"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 2.5C12.55 8.15 15.85 11.45 21.5 12C15.85 12.55 12.55 15.85 12 21.5C11.45 15.85 8.15 12.55 2.5 12C8.15 11.45 11.45 8.15 12 2.5Z" fill="url(#aistudio_grad)"/>
+  <path d="M18.5 3.5C18.7 5.3 19.7 6.3 21.5 6.5C19.7 6.7 18.7 7.7 18.5 9.5C18.3 7.7 17.3 6.7 15.5 6.5C17.3 6.3 18.3 5.3 18.5 3.5Z" fill="#4285F4"/>
 </svg>

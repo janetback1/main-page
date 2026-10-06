@@ -17,27 +17,59 @@
   }
 }
 
-/* 响应式自动列数网格：
- * 手机端自动适配 2～3 列
- * 平板端自动适配 4～5 列
- * 电脑端自动适配 6～8 列
+/* 紧凑图标墙网格：
+ * 手机端：每列最小 68px，一排可容纳 4~5 个图标
+ * 桌面端：每列最小 84px，紧凑排列更多图标
  */
-.site-grid {
+.icon-wall-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  column-gap: 0.5rem;
+  row-gap: 0.875rem;
+  justify-items: center;
 }
 
 @media (min-width: 640px) {
-  .site-grid {
-    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-    gap: 0.875rem;
+  .icon-wall-grid {
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    column-gap: 0.75rem;
+    row-gap: 1.125rem;
   }
 }
 
-@media (min-width: 1024px) {
-  .site-grid {
-    grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
-    gap: 1rem;
+/* 网站图标尺寸规范：
+ * 手机端：48×48px（最大不超过 56px）
+ * 桌面端：60×60px（最大不超过 70px）
+ * 使用 object-fit: contain
+ */
+.site-icon-box {
+  width: 48px;
+  height: 48px;
+  max-width: 56px;
+  max-height: 56px;
+}
+
+.site-icon-img {
+  width: 48px;
+  height: 48px;
+  max-width: 56px;
+  max-height: 56px;
+  object-fit: contain;
+}
+
+@media (min-width: 640px) {
+  .site-icon-box {
+    width: 60px;
+    height: 60px;
+    max-width: 70px;
+    max-height: 70px;
+  }
+
+  .site-icon-img {
+    width: 60px;
+    height: 60px;
+    max-width: 70px;
+    max-height: 70px;
+    object-fit: contain;
   }
 }
