@@ -1,0 +1,6 @@
+{
+  "name": "我的导航",
+  "description": "简洁、快速、手机优先的个人网站导航主页",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
