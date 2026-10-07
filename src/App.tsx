@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { initialSites } from './data/sites.js';
 import { Site, SiteItem } from './components/SiteItem';
@@ -47,6 +47,10 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSite, setEditingSite] = useState<Site | null>(null);
 
+  // 整理模式与当前正在拖动的网站 ID
+  const [isOrganizeMode, setIsOrganizeMode] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
   // 长按 / 右键触发的简洁管理菜单状态
   const [managingSite, setManagingSite] = useState<Site | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -63,6 +67,32 @@ export default function App() {
       site.name.toLowerCase().includes(normalizedQuery)
     );
   }, [sites, normalizedQuery]);
+
+  const handleStartDrag = useCallback((siteId: string) => {
+    setDraggingId(siteId);
+  }, []);
+
+  const handleDragMoveTo = useCallback(
+    (targetSiteId: string) => {
+      setSites((prev) => {
+        if (!draggingId || draggingId === targetSiteId) return prev;
+        const fromIndex = prev.findIndex((item) => item.id === draggingId);
+        const toIndex = prev.findIndex((item) => item.id === targetSiteId);
+        if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+          return prev;
+        }
+        const next = [...prev];
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, moved);
+        return next;
+      });
+    },
+    [draggingId]
+  );
+
+  const handleEndDrag = useCallback(() => {
+    setDraggingId(null);
+  }, []);
 
   const handleOpenAddModal = () => {
     setEditingSite(null);
@@ -129,13 +159,36 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto max-w-5xl px-3 py-4 sm:px-6 sm:py-7">
-        {/* 紧凑顶部栏 */}
-        <header className="mb-4 sm:mb-6 flex items-center justify-between gap-3">
+        {/* 紧凑顶部栏：标题 + 搜索框 + 简洁「整理」按钮 */}
+        <header className="mb-4 sm:mb-6 flex items-center justify-between gap-2.5">
           <h1 className="text-base sm:text-lg font-semibold tracking-tight text-slate-900 whitespace-nowrap">
             我的主页
           </h1>
-          <SearchBox value={searchQuery} onChange={setSearchQuery} />
+
+          <div className="flex flex-1 sm:flex-initial items-center justify-end gap-2">
+            <SearchBox value={searchQuery} onChange={setSearchQuery} />
+            <button
+              type="button"
+              onClick={() => {
+                setIsOrganizeMode((prev) => !prev);
+                setDraggingId(null);
+              }}
+              className={`h-9 shrink-0 rounded-xl border px-3 text-xs font-medium transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+                isOrganizeMode
+                  ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-800'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              {isOrganizeMode ? '完成' : '整理'}
+            </button>
+          </div>
         </header>
+
+        {isOrganizeMode && (
+          <p className="mb-3 text-center text-xs text-slate-500">
+            按住并拖动网站图标即可调整排列顺序，完成后点击右上角「完成」
+          </p>
+        )}
 
         {/* 紧凑图标墙：仅展示 图标 + 网站名称，以及唯一的「＋ 添加网站」 */}
         <main>
@@ -144,25 +197,32 @@ export default function App() {
               <SiteItem
                 key={site.id}
                 site={site}
+                isOrganizeMode={isOrganizeMode}
+                isDragging={draggingId === site.id}
+                onStartDrag={handleStartDrag}
+                onDragMoveTo={handleDragMoveTo}
+                onEndDrag={handleEndDrag}
                 onLongPressOrContext={handleOpenManageMenu}
                 onPlaceholderClick={handlePlaceholderClick}
               />
             ))}
 
             {/* 唯一的「＋ 添加网站」入口：与普通网站采用相同的紧凑图标样式 */}
-            <button
-              type="button"
-              onClick={handleOpenAddModal}
-              aria-label="添加网站"
-              className="group flex w-full max-w-[76px] sm:max-w-[92px] flex-col items-center select-none text-center cursor-pointer focus:outline-none"
-            >
-              <div className="site-icon-box flex items-center justify-center rounded-xl border border-dashed border-slate-300 text-slate-400 transition-colors duration-150 group-hover:border-slate-400 group-hover:text-slate-700 group-active:scale-95">
-                <Plus className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.8} />
-              </div>
-              <span className="mt-1.5 w-full truncate px-0.5 text-xs leading-tight text-slate-500 group-hover:text-slate-800">
-                添加网站
-              </span>
-            </button>
+            {!isOrganizeMode && (
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                aria-label="添加网站"
+                className="group flex w-full max-w-[76px] sm:max-w-[92px] flex-col items-center select-none text-center cursor-pointer p-1 focus:outline-none"
+              >
+                <div className="site-icon-box flex items-center justify-center rounded-xl border border-dashed border-slate-300 text-slate-400 transition-colors duration-150 group-hover:border-slate-400 group-hover:text-slate-700 group-active:scale-95">
+                  <Plus className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.8} />
+                </div>
+                <span className="mt-1.5 w-full truncate px-0.5 text-xs leading-tight text-slate-500 group-hover:text-slate-800">
+                  添加网站
+                </span>
+              </button>
+            )}
           </div>
         </main>
       </div>
